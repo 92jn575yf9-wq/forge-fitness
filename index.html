@@ -494,20 +494,14 @@ function startWorkout(){ goTo('workout'); }
 function getKiVal(deviceName) {
   const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
   if(!plan || !plan.length) return null;
-  // Try exact match first
-  let match = plan.find(g => g.name.toLowerCase()===deviceName.toLowerCase());
-  // Fuzzy: check if one contains the other
-  if(!match) match = plan.find(g =>
-    g.name.toLowerCase().includes(deviceName.toLowerCase()) ||
-    deviceName.toLowerCase().includes(g.name.toLowerCase())
-  );
+  const dn = deviceName.toLowerCase();
+  let match = plan.find(g => g.name.toLowerCase()===dn);
+  if(!match) match = plan.find(g => g.name.toLowerCase().includes(dn) || dn.includes(g.name.toLowerCase()));
   if(!match) return null;
   return {weight: match.gewicht, reps: match.wiederholungen, sets: match.saetze};
 }
-
 function hasKiPlan() {
-  const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
-  return plan && plan.length > 0;
+  try { const p=JSON.parse(localStorage.getItem('forge_ki_plan')||'null'); return p&&p.length>0; } catch(e){ return false; }
 }
 
 async function renderWorkout(){
@@ -515,12 +509,12 @@ async function renderWorkout(){
   const devices=await loadDevices();
   const workouts=await loadWorkouts();
   document.getElementById('workout-date-sub').textContent=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'});
-  const kiActive = hasKiPlan();
   function lastVal(id){ for(const w of workouts){ const e=w.entries.find(e=>e.device_id===id); if(e) return e; } return null; }
   const mandatory=devices.filter(d=>!d.optional);
   const optional=devices.filter(d=>d.optional);
-  let html='',sn=1;
-  if(kiActive) html += '<div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:var(--accent);">&#10024; KI-Plan aktiv – Werte wurden vorausgef\u00fcllt</div>';
+  const kiActive=hasKiPlan();
+  let html=kiActive?'<div style="background:rgba(181,242,61,.12);border:1px solid #b5f23d;border-radius:12px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#b5f23d;">&#10024; KI-Plan aktiv – Werte vorausgefüllt</div>':'';
+  let sn=1;
   groupBy(mandatory).forEach(g=>{
     if(g.devices.length>1){
       html+=`<div class="group-header"><span class="group-station">${sn}</span>${g.name}</div>`;
@@ -791,7 +785,7 @@ async function generateKiPlan() {
     return `${dateStr}:\n${entries}`;
   }).join('\n\n');
 
-  const deviceList = devices.filter(d=>!d.optional).map(d=>`- "${d.name}" (${d.muscle})`).join('\n');
+  const deviceList = devices.map(d=>`- ${d.name} (${d.muscle}${d.optional?' – optional':''})`).join('\n');
 
   const prompt = `Du bist ein professioneller Fitness-Trainer. Erstelle einen personalisierten Trainingsplan für heute.
 
@@ -823,7 +817,7 @@ Erstelle einen konkreten Trainingsplan für HEUTE. Antworte NUR mit einem JSON-O
   ]
 }
 
-WICHTIG: Verwende die Gerätenamen EXAKT wie in der Liste angegeben (mit Anführungszeichen). Nur Pflicht-Geräte einplanen. Progressive Steigerung berücksichtigen. Rücken-Gesundheit immer mitdenken.`;
+Wichtig: Nur Pflicht-Geräte einplanen (keine optionalen), außer sie passen besonders gut zum Ziel. Progressive Steigerung berücksichtigen. Rücken-Gesundheit immer mitdenken.`;
 
   // Show loading
   document.getElementById('ki-content').innerHTML = `
@@ -886,12 +880,14 @@ function renderKiPlan(plan, devices) {
       </div>`;
   });
 
-  html += `<button class="finish-btn" style="margin-top:8px;" onclick="applyKiPlanAndStart(${JSON.stringify(plan.geraete).replace(/</g,'\\u003c')})">▶ PLAN ÜBERNEHMEN &amp; STARTEN</button>`;
+  window._pendingKiPlan = plan.geraete;
+  html += `<button class="finish-btn" style="margin-top:8px;" onclick="applyKiPlanAndStart()">&#9654; PLAN &Uuml;BERNEHMEN &amp; STARTEN</button>`;
   document.getElementById('ki-content').innerHTML = html;
 }
 
-function applyKiPlanAndStart(geraete) {
-  // Store plan so workout screen can pre-fill it
+function applyKiPlanAndStart() {
+  const geraete = window._pendingKiPlan || [];
+  if(!geraete.length){ showToast('Kein Plan vorhanden'); return; }
   localStorage.setItem('forge_ki_plan', JSON.stringify(geraete));
   goTo('workout');
 }
