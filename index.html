@@ -492,16 +492,22 @@ async function renderHome(){
 function startWorkout(){ goTo('workout'); }
 
 function getKiVal(deviceName) {
-  const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
-  if(!plan || !plan.length) return null;
-  const dn = deviceName.toLowerCase();
-  let match = plan.find(g => g.name.toLowerCase()===dn);
-  if(!match) match = plan.find(g => g.name.toLowerCase().includes(dn) || dn.includes(g.name.toLowerCase()));
-  if(!match) return null;
-  return {weight: match.gewicht, reps: match.wiederholungen, sets: match.saetze};
+  try {
+    const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
+    if(!plan || !plan.length) return null;
+    const dn = deviceName.toLowerCase().replace(/[^a-z0-9äöü]/g,' ').trim();
+    // 1. Exact
+    let m = plan.find(g=>g.name.toLowerCase()===deviceName.toLowerCase());
+    // 2. Contains
+    if(!m) m = plan.find(g=>{ const gn=g.name.toLowerCase(); return gn.includes(dn)||dn.includes(gn); });
+    // 3. Word overlap
+    if(!m){ const dw=dn.split(' ').filter(w=>w.length>2); m=plan.find(g=>{ const gw=g.name.toLowerCase().split(' ').filter(w=>w.length>2); return dw.some(w=>gw.some(gv=>gv.includes(w)||w.includes(gv))); }); }
+    if(!m) return null;
+    return {weight:m.gewicht, reps:m.wiederholungen, sets:m.saetze};
+  } catch(e){ return null; }
 }
 function hasKiPlan() {
-  try { const p=JSON.parse(localStorage.getItem('forge_ki_plan')||'null'); return p&&p.length>0; } catch(e){ return false; }
+  try { const p=JSON.parse(localStorage.getItem('forge_ki_plan')||'null'); return !!(p&&p.length); } catch(e){ return false; }
 }
 
 async function renderWorkout(){
@@ -512,27 +518,30 @@ async function renderWorkout(){
   function lastVal(id){ for(const w of workouts){ const e=w.entries.find(e=>e.device_id===id); if(e) return e; } return null; }
   const mandatory=devices.filter(d=>!d.optional);
   const optional=devices.filter(d=>d.optional);
-  const kiActive=hasKiPlan();
-  let html=kiActive?'<div style="background:rgba(181,242,61,.12);border:1px solid #b5f23d;border-radius:12px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#b5f23d;">&#10024; KI-Plan aktiv – Werte vorausgefüllt</div>':'';
-  let sn=1;
+  let html='',sn=1;
   groupBy(mandatory).forEach(g=>{
     if(g.devices.length>1){
       html+=`<div class="group-header"><span class="group-station">${sn}</span>${g.name}</div>`;
-      g.devices.forEach(d=>{html+=cardHTML(d,null,lastVal(d.id));});
-    } else { html+=cardHTML(g.devices[0],sn,lastVal(g.devices[0].id)); }
+      g.devices.forEach(d=>{html+=cardHTML(d,null,lastVal(d.id),getKiVal(d.name));});
+    } else { html+=cardHTML(g.devices[0],sn,lastVal(g.devices[0].id),getKiVal(g.devices[0].name)); }
     sn++;
   });
   if(optional.length){
     html+='<div class="section-title">OPTIONAL</div>';
-    groupBy(optional).forEach(g=>g.devices.forEach(d=>{html+=cardHTML(d,sn++,lastVal(d.id));}));
+    groupBy(optional).forEach(g=>g.devices.forEach(d=>{html+=cardHTML(d,sn++,lastVal(d.id),getKiVal(d.name));}));
   }
   html+='<button class="finish-btn" onclick="finishWorkout()">&#10003; TRAINING ABSCHLIESSEN</button>';
   document.getElementById('workout-devices-list').innerHTML=html;
 }
 
-function cardHTML(d,num,last){
-  const pw=last?last.weight:'', pr=last?last.reps:12, ps=last?last.sets:3;
-  const hint=last?`Letztes Mal: ${last.weight} kg &middot; ${last.reps} Wdh &middot; ${last.sets} S\u00e4tze`:'Erster Eintrag';
+function cardHTML(d,num,last,ki){
+  // KI values take priority for pre-fill, last values as fallback
+  const pw=ki?ki.weight:(last?last.weight:'');
+  const pr=ki?ki.reps:(last?last.reps:12);
+  const ps=ki?ki.sets:(last?last.sets:3);
+  const lastHint=last?`Letztes Mal: ${last.weight} kg · ${last.reps} Wdh · ${last.sets} Sätze`:'Erster Eintrag';
+  const kiHint=ki?`<span style="color:var(--accent);">&#10024; KI: ${ki.weight} kg · ${ki.reps} Wdh · ${ki.sets} Sätze</span><br>`:'';
+  const hint=`${kiHint}${lastHint}`;
   const badge=num!==null?`<div class="device-num">${num}</div>`:'<div class="device-num sub">&#8627;</div>';
   return `<div class="device-card" id="card-${d.id}">
     <div class="device-top">${badge}<div class="device-name">${d.name}</div><div class="device-muscle">${d.muscle}</div></div>
