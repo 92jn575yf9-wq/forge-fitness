@@ -494,13 +494,10 @@ function startWorkout(){ goTo('workout'); }
 function getKiVal(deviceName) {
   try {
     const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
-    if(!plan || !plan.length) return null;
+    if(!plan||!plan.length) return null;
     const dn = deviceName.toLowerCase().replace(/[^a-z0-9äöü]/g,' ').trim();
-    // 1. Exact
     let m = plan.find(g=>g.name.toLowerCase()===deviceName.toLowerCase());
-    // 2. Contains
     if(!m) m = plan.find(g=>{ const gn=g.name.toLowerCase(); return gn.includes(dn)||dn.includes(gn); });
-    // 3. Word overlap
     if(!m){ const dw=dn.split(' ').filter(w=>w.length>2); m=plan.find(g=>{ const gw=g.name.toLowerCase().split(' ').filter(w=>w.length>2); return dw.some(w=>gw.some(gv=>gv.includes(w)||w.includes(gv))); }); }
     if(!m) return null;
     return {weight:m.gewicht, reps:m.wiederholungen, sets:m.saetze};
@@ -516,10 +513,20 @@ async function renderWorkout(){
   const workouts=await loadWorkouts();
   document.getElementById('workout-date-sub').textContent=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'});
   function lastVal(id){ for(const w of workouts){ const e=w.entries.find(e=>e.device_id===id); if(e) return e; } return null; }
-  const mandatory=devices.filter(d=>!d.optional);
+  const kiPlan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null')||[];
+  const hasKi = d => !!getKiVal(d.name);
+  const mandatory=devices.filter(d=>!d.optional).sort((a,b)=>{ const ak=hasKi(a)?0:1, bk=hasKi(b)?0:1; return ak-bk; });
   const optional=devices.filter(d=>d.optional);
-  let html='',sn=1;
+  const kiActive=hasKiPlan();
+  let html=kiActive?'<div style="background:rgba(181,242,61,.12);border:1px solid var(--accent);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px;"><span>&#10024;</span><span>KI-Plan aktiv – Geräte mit Vorschlag sind oben</span></div>':'';
+  let kiSectionDone=false;
+  let sn=1;
   groupBy(mandatory).forEach(g=>{
+    const gHasKi=g.devices.some(d=>getKiVal(d.name));
+    if(!kiSectionDone&&!gHasKi&&kiActive){
+      html+='<div style="font-size:10px;letter-spacing:2px;color:var(--text-muted);margin:16px 0 8px;">WEITERE GERÄTE</div>';
+      kiSectionDone=true;
+    }
     if(g.devices.length>1){
       html+=`<div class="group-header"><span class="group-station">${sn}</span>${g.name}</div>`;
       g.devices.forEach(d=>{html+=cardHTML(d,null,lastVal(d.id),getKiVal(d.name));});
@@ -535,21 +542,20 @@ async function renderWorkout(){
 }
 
 function cardHTML(d,num,last,ki){
-  // KI values take priority for pre-fill, last values as fallback
   const pw=ki?ki.weight:(last?last.weight:'');
   const pr=ki?ki.reps:(last?last.reps:12);
   const ps=ki?ki.sets:(last?last.sets:3);
   const lastHint=last?`Letztes Mal: ${last.weight} kg · ${last.reps} Wdh · ${last.sets} Sätze`:'Erster Eintrag';
-  const kiHint=ki?`<span style="color:var(--accent);">&#10024; KI: ${ki.weight} kg · ${ki.reps} Wdh · ${ki.sets} Sätze</span><br>`:'';
-  const hint=`${kiHint}${lastHint}`;
+  const kiHint=ki?`<div style="font-size:11px;color:var(--accent);margin-bottom:3px;">&#10024; KI: ${ki.weight} kg · ${ki.reps} Wdh · ${ki.sets} Sätze</div>`:'';
+  const borderStyle=ki?'border:2px solid var(--accent);':'';
   const badge=num!==null?`<div class="device-num">${num}</div>`:'<div class="device-num sub">&#8627;</div>';
-  return `<div class="device-card" id="card-${d.id}">
+  return `<div class="device-card" id="card-${d.id}" style="${borderStyle}">
     <div class="device-top">${badge}<div class="device-name">${d.name}</div><div class="device-muscle">${d.muscle}</div></div>
-    <div class="hint-text">${hint}</div>
+    ${kiHint}<div class="hint-text">${lastHint}</div>
     <div class="input-row">
       <div class="input-group"><div class="input-label">Gewicht kg</div><input class="input-field" id="w-${d.id}" type="number" inputmode="decimal" value="${pw}" placeholder="0"></div>
       <div class="input-group"><div class="input-label">Wdh.</div><input class="input-field" id="r-${d.id}" type="number" inputmode="numeric" value="${pr}" placeholder="12"></div>
-      <div class="input-group"><div class="input-label">S\u00e4tze</div><input class="input-field" id="s-${d.id}" type="number" inputmode="numeric" value="${ps}" placeholder="3"></div>
+      <div class="input-group"><div class="input-label">Sätze</div><input class="input-field" id="s-${d.id}" type="number" inputmode="numeric" value="${ps}" placeholder="3"></div>
     </div>
     <button class="log-device-btn" id="btn-${d.id}" onclick="logDevice(${d.id})">&#10003; EINTRAGEN</button>
   </div>`;
@@ -561,9 +567,15 @@ function logDevice(id){
   const s=parseInt(document.getElementById('s-'+id).value)||1;
   if(!w){showToast('Bitte Gewicht eingeben');return;}
   currentSession[id]={device_id:id,weight:w,reps:r,sets:s};
-  document.getElementById('card-'+id).classList.add('logged');
+  const card=document.getElementById('card-'+id);
+  card.classList.add('logged');
+  card.style.opacity='0.45';
+  const nameEl=card.querySelector('.device-name');
+  if(nameEl) nameEl.style.textDecoration='line-through';
+  const topEl=card.querySelector('.device-top');
+  if(topEl){ const badge=topEl.querySelector('.device-num,.device-num.sub'); if(badge){ badge.textContent='✓'; badge.style.background='var(--accent)'; badge.style.color='#000'; } }
   const btn=document.getElementById('btn-'+id);
-  btn.textContent='✓ EINGETRAGEN'; btn.classList.add('done');
+  btn.textContent='✓ ERLEDIGT'; btn.classList.add('done');
   showToast('Eingetragen!');
 }
 
