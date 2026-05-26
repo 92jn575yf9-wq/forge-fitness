@@ -292,6 +292,7 @@
     <div class="form-group"><label class="form-label">Muskelgruppe</label><input class="form-input" id="edit-muscle" type="text"></div>
     <div class="form-group"><label class="form-label">Station / Gruppe</label><input class="form-input" id="edit-group" type="text"></div>
     <div class="form-group"><label class="form-label">Typ</label><select class="form-select" id="edit-optional"><option value="false">Pflicht</option><option value="true">Optional</option></select></div>
+    <div class="form-group"><label class="form-label">Gewichtsstufen (kg, kommagetrennt)</label><input class="form-input" id="edit-stages" type="text" placeholder="z.B. 9,14,18,23,29,36,43,50"></div>
     <button class="modal-btn" onclick="saveEditDevice()">SPEICHERN</button>
     <button class="modal-cancel" onclick="closeEditModal()">Abbrechen</button>
   </div>
@@ -668,6 +669,8 @@ function openEditDevice(id){
   document.getElementById('edit-muscle').value=d.muscle;
   document.getElementById('edit-group').value=d.group||d.name;
   document.getElementById('edit-optional').value=d.optional?'true':'false';
+  const stages=getDeviceStages(id);
+  document.getElementById('edit-stages').value=stages.join(',');
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -681,13 +684,18 @@ async function saveEditDevice(){
   const muscle=document.getElementById('edit-muscle').value.trim();
   const group=document.getElementById('edit-group').value.trim();
   const optional=document.getElementById('edit-optional').value==='true';
+  const stagesRaw=document.getElementById('edit-stages').value.trim();
   if(!name){showToast('Name eingeben');return;}
+  if(stagesRaw){
+    const stages=stagesRaw.split(',').map(s=>parseFloat(s.trim())).filter(n=>!isNaN(n)&&n>0).sort((a,b)=>a-b);
+    if(stages.length) localStorage.setItem('forge_stages_'+id,JSON.stringify(stages));
+  }
   try{
-    await api('PATCH','devices',{name,muscle:muscle||'\u2014',group:group||name,optional},`?id=eq.${id}`);
+    await api('PATCH','devices',{name,muscle:muscle||'—',group:group||name,optional},`?id=eq.${id}`);
     _devices=null;
     closeEditModal();
     renderDevices();
-    showToast('Ger\u00e4t gespeichert!');
+    showToast('Gerät gespeichert!');
   } catch(e){showToast('Fehler beim Speichern');}
 }
 
