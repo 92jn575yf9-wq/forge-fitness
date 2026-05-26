@@ -653,7 +653,7 @@ async function renderDevices(){
   m.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle} &middot; ${d.group}</div></div></div><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button></div>`; });
   if(o.length){
     html+=`<div class="section-title">OPTIONAL (${o.length})</div>`;
-    o.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${m.length+i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle}</div></div></div><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button></div>`; });
+    o.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${m.length+i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle}</div></div></div><div style="display:flex;gap:6px;"><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button><button onclick="deleteDevice(${d.id},'${d.name}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#ff6b6b;font-size:13px;padding:5px 9px;cursor:pointer;">&#128465;</button></div></div>`; });
   }
   html+='<button class="add-device-btn" onclick="openAddDevice()">+ Neues Ger\u00e4t hinzuf\u00fcgen</button>';
   document.getElementById('devices-list').innerHTML=html;
@@ -989,6 +989,16 @@ async function saveEditEntry(){
     renderHistory();
     showToast('Eintrag gespeichert!');
   } catch(e){showToast('Fehler beim Speichern');}
+}
+
+async function deleteDevice(id, name){
+  if(!confirm('Gerät "'+name+'" wirklich löschen?')) return;
+  try{
+    await api('DELETE','devices',null,`?id=eq.${id}`);
+    _devices=null;
+    renderDevices();
+    showToast(name+' gelöscht');
+  } catch(e){ showToast('Fehler beim Löschen'); }
 }
 function showToast(msg){
   const t=document.getElementById('toast');
