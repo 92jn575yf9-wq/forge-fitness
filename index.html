@@ -292,7 +292,14 @@
     <div class="form-group"><label class="form-label">Muskelgruppe</label><input class="form-input" id="edit-muscle" type="text"></div>
     <div class="form-group"><label class="form-label">Station / Gruppe</label><input class="form-input" id="edit-group" type="text"></div>
     <div class="form-group"><label class="form-label">Typ</label><select class="form-select" id="edit-optional"><option value="false">Pflicht</option><option value="true">Optional</option></select></div>
-    <div class="form-group"><label class="form-label">Gewichtsstufen (kg, kommagetrennt)</label><input class="form-input" id="edit-stages" type="text" placeholder="z.B. 9,14,18,23,29,36,43,50"></div>
+    <div class="form-group">
+      <label class="form-label">Gewichtsstufen (kg)</label>
+      <div class="wchip-scroll" id="edit-stages-chips" style="margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="form-input" id="edit-stages-new" type="number" inputmode="decimal" placeholder="z.B. 115" style="text-align:left;">
+        <button onclick="addEditStage()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 12px;font-family:'DM Sans';font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">+ ADD</button>
+      </div>
+    </div>
     <button class="modal-btn" onclick="saveEditDevice()">SPEICHERN</button>
     <button class="modal-cancel" onclick="closeEditModal()">Abbrechen</button>
   </div>
@@ -669,8 +676,7 @@ function openEditDevice(id){
   document.getElementById('edit-muscle').value=d.muscle;
   document.getElementById('edit-group').value=d.group||d.name;
   document.getElementById('edit-optional').value=d.optional?'true':'false';
-  const stages=getDeviceStages(id);
-  document.getElementById('edit-stages').value=stages.join(',');
+  renderEditStages(id);
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -684,11 +690,9 @@ async function saveEditDevice(){
   const muscle=document.getElementById('edit-muscle').value.trim();
   const group=document.getElementById('edit-group').value.trim();
   const optional=document.getElementById('edit-optional').value==='true';
-  const stagesRaw=document.getElementById('edit-stages').value.trim();
   if(!name){showToast('Name eingeben');return;}
-  if(stagesRaw){
-    const stages=stagesRaw.split(',').map(s=>parseFloat(s.trim())).filter(n=>!isNaN(n)&&n>0).sort((a,b)=>a-b);
-    if(stages.length) localStorage.setItem('forge_stages_'+id,JSON.stringify(stages));
+  if(window._editStages && window._editStages.length){
+    localStorage.setItem('forge_stages_'+id, JSON.stringify(window._editStages));
   }
   try{
     await api('PATCH','devices',{name,muscle:muscle||'—',group:group||name,optional},`?id=eq.${id}`);
@@ -1009,6 +1013,36 @@ async function deleteDevice(id, name){
     renderDevices();
     showToast(name+' gelöscht');
   } catch(e){ showToast('Fehler beim Löschen'); }
+}
+
+function renderEditStages(deviceId) {
+  window._editStagesDeviceId = deviceId;
+  window._editStages = [...getDeviceStages(deviceId)];
+  refreshEditStagesUI();
+}
+function refreshEditStagesUI() {
+  const container = document.getElementById('edit-stages-chips');
+  if(!container) return;
+  container.innerHTML = (window._editStages||[]).map(w =>
+    `<div class="wchip" style="display:flex;align-items:center;gap:4px;padding:0 6px 0 10px;">
+      <span>${w}</span>
+      <button onclick="removeEditStage(${w})" style="background:transparent;border:none;color:#ff6b6b;font-size:15px;cursor:pointer;padding:2px 3px;line-height:1;">&#x2715;</button>
+    </div>`
+  ).join('');
+}
+function removeEditStage(w) {
+  window._editStages = (window._editStages||[]).filter(s=>s!==w);
+  refreshEditStagesUI();
+}
+function addEditStage() {
+  const inp = document.getElementById('edit-stages-new');
+  const val = parseFloat(inp.value);
+  if(!val||val<=0){showToast('Gültige Zahl eingeben');return;}
+  if(!(window._editStages||[]).includes(val)){
+    window._editStages = [...(window._editStages||[]), val].sort((a,b)=>a-b);
+    refreshEditStagesUI();
+  }
+  inp.value='';
 }
 function showToast(msg){
   const t=document.getElementById('toast');
