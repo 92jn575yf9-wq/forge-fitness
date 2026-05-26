@@ -170,17 +170,6 @@
   .strength-delta { font-size:11px; padding:2px 6px; border-radius:20px; }
   .strength-delta.up { background:rgba(181,242,61,.15); color:var(--accent); }
   .strength-delta.same { background:var(--surface2); color:var(--text-muted); }
-
-  .wchip-scroll { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch; scrollbar-width:none; overflow-y:hidden; }
-  .wchip-scroll::-webkit-scrollbar { display:none; }
-  .wchip { flex-shrink:0; min-width:50px; height:44px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:var(--text-mid); cursor:pointer; transition:all .15s; }
-  .wchip-active { background:var(--accent)!important; color:#000!important; border-color:var(--accent)!important; transform:scale(1.08); }
-  .wchip-ki { border-color:var(--accent); color:var(--accent); }
-  .rpe-btn { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:8px 4px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; transition:all .15s; }
-  .rpe-btn.rpe-easy { border-color:#4ade80; background:rgba(74,222,128,.12); }
-  .rpe-btn.rpe-perfect { border-color:var(--accent); background:var(--accent-dim); }
-  .rpe-btn.rpe-hard { border-color:#ff6b6b; background:rgba(255,107,107,.12); }
-  .rpe-label-txt { font-size:10px; font-weight:600; color:var(--text-muted); letter-spacing:.5px; }
   .sync-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); display:inline-block; transition:background .3s; }
   .sync-dot.syncing { background:var(--orange); animation:pulse .8s infinite; }
   .sync-dot.error { background:#ff4444; }
@@ -353,20 +342,6 @@
   </div>
   <div style="padding:0 20px 20px;flex-shrink:0;">
     <button class="finish-btn" id="ki-generate-btn" onclick="generateKiPlan()">✨ PLAN GENERIEREN</button>
-  </div>
-</div>
-
-<!-- EDIT ENTRY MODAL -->
-<div class="modal-overlay" id="edit-entry-modal">
-  <div class="modal">
-    <div class="modal-title">EINTRAG ÄNDERN</div>
-    <input type="hidden" id="edit-entry-id">
-    <div id="edit-entry-name" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;"></div>
-    <div class="form-group"><label class="form-label">Gewicht (kg)</label><input class="form-input" id="edit-entry-weight" type="number" inputmode="decimal"></div>
-    <div class="form-group"><label class="form-label">Wiederholungen</label><input class="form-input" id="edit-entry-reps" type="number" inputmode="numeric"></div>
-    <div class="form-group"><label class="form-label">Sätze</label><input class="form-input" id="edit-entry-sets" type="number" inputmode="numeric"></div>
-    <button class="modal-btn" onclick="saveEditEntry()">SPEICHERN</button>
-    <button class="modal-cancel" onclick="closeEditEntryModal()">Abbrechen</button>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -548,93 +523,54 @@ async function renderWorkout(){
   document.getElementById('workout-devices-list').innerHTML=html;
 }
 
-function getDeviceStages(deviceId){
-  const known=JSON.parse(localStorage.getItem('forge_stages_'+deviceId)||'null');
-  if(known&&known.length) return known;
-  return [5,9,14,18,23,29,36,43,50,57,63,70,77,84,90,97,103,110,120];
-}
-function learnStage(deviceId,weight){
-  if(!weight) return;
-  const stages=getDeviceStages(deviceId);
-  if(!stages.includes(weight)){stages.push(weight);stages.sort((a,b)=>a-b);localStorage.setItem('forge_stages_'+deviceId,JSON.stringify(stages));}
-}
-function selectStage(deviceId,weight){
-  const scroll=document.getElementById('wscroll-'+deviceId);
-  if(!scroll) return;
-  scroll.querySelectorAll('.wchip').forEach(ch=>{const w=parseInt(ch.textContent);ch.className='wchip'+(w==weight?' wchip-active':'');});
-  const active=scroll.querySelector('.wchip-active');
-  if(active) active.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
-}
-function getSelectedWeight(deviceId){
-  const scroll=document.getElementById('wscroll-'+deviceId);
-  if(!scroll) return 0;
-  const active=scroll.querySelector('.wchip-active');
-  return active?parseInt(active.textContent):0;
-}
-function selectRpe(deviceId,level){
-  ['easy','perfect','hard'].forEach(l=>{const btn=document.getElementById('rpe-'+l+'-'+deviceId);if(btn) btn.className='rpe-btn'+(l===level?' rpe-'+l:'');});
-}
-function getSelectedRpe(deviceId){
-  for(const l of ['easy','perfect','hard']){const btn=document.getElementById('rpe-'+l+'-'+deviceId);if(btn&&btn.className.includes('rpe-'+l)) return l;}
-  return null;
-}
-function cardHTML(d,num,last,ki){
-  const pw=ki?ki.weight:(last?last.weight:null);
-  const pr=ki?ki.reps:(last?last.reps:12);
-  const ps=ki?ki.sets:(last?last.sets:3);
-  const lastHint=last?`Letztes Mal: ${last.weight} kg \u00b7 ${last.reps} Wdh \u00b7 ${last.sets} S\u00e4tze`:'Erster Eintrag';
-  const kiHint=ki?`<div style="font-size:11px;color:var(--accent);margin-bottom:3px;">&#10024; KI: ${ki.weight} kg \u00b7 ${ki.reps} Wdh \u00b7 ${ki.sets} S\u00e4tze</div>`:'';
-  const borderStyle=ki?'border:2px solid var(--accent);':'';
-  const stages=getDeviceStages(d.id);
-  const selW=pw||stages[Math.floor(stages.length/2)];
-  const chips=stages.map(w=>`<div class="wchip ${w==selW?'wchip-active':''} ${ki&&w==ki.weight&&w!=selW?'wchip-ki':''}" onclick="selectStage(${d.id},${w})">${w}</div>`).join('');
+function cardHTML(d,num,last){
+  const pw=last?last.weight:'', pr=last?last.reps:12, ps=last?last.sets:3;
+  const hint=last?`Letztes Mal: ${last.weight} kg &middot; ${last.reps} Wdh &middot; ${last.sets} S\u00e4tze`:'Erster Eintrag';
   const badge=num!==null?`<div class="device-num">${num}</div>`:'<div class="device-num sub">&#8627;</div>';
-  return `<div class="device-card" id="card-${d.id}" style="${borderStyle}">
+  return `<div class="device-card" id="card-${d.id}">
     <div class="device-top">${badge}<div class="device-name">${d.name}</div><div class="device-muscle">${d.muscle}</div></div>
-    ${kiHint}<div class="hint-text">${lastHint}</div>
-    <div style="margin-bottom:12px;"><div class="input-label" style="margin-bottom:6px;">GEWICHT KG</div><div class="wchip-scroll" id="wscroll-${d.id}">${chips}</div></div>
-    <div class="input-row" style="grid-template-columns:1fr 1fr;margin-bottom:12px;">
+    <div class="hint-text">${hint}</div>
+    <div class="input-row">
+      <div class="input-group"><div class="input-label">Gewicht kg</div><input class="input-field" id="w-${d.id}" type="number" inputmode="decimal" value="${pw}" placeholder="0"></div>
       <div class="input-group"><div class="input-label">Wdh.</div><input class="input-field" id="r-${d.id}" type="number" inputmode="numeric" value="${pr}" placeholder="12"></div>
       <div class="input-group"><div class="input-label">S\u00e4tze</div><input class="input-field" id="s-${d.id}" type="number" inputmode="numeric" value="${ps}" placeholder="3"></div>
-    </div>
-    <div style="margin-bottom:12px;"><div class="input-label" style="margin-bottom:6px;">WIE WAR DIE \u00dcBUNG?</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-        <button class="rpe-btn" id="rpe-easy-${d.id}" onclick="selectRpe(${d.id},'easy')"><span style="font-size:18px;">&#128528;</span><div class="rpe-label-txt">LEICHT</div></button>
-        <button class="rpe-btn" id="rpe-perfect-${d.id}" onclick="selectRpe(${d.id},'perfect')"><span style="font-size:18px;">&#128170;</span><div class="rpe-label-txt">PERFEKT</div></button>
-        <button class="rpe-btn" id="rpe-hard-${d.id}" onclick="selectRpe(${d.id},'hard')"><span style="font-size:18px;">&#128548;</span><div class="rpe-label-txt">SCHWER</div></button>
-      </div>
     </div>
     <button class="log-device-btn" id="btn-${d.id}" onclick="logDevice(${d.id})">&#10003; EINTRAGEN</button>
   </div>`;
 }
 
 function logDevice(id){
-  const w=getSelectedWeight(id);
+  const w=parseFloat(document.getElementById('w-'+id).value)||0;
   const r=parseInt(document.getElementById('r-'+id).value)||0;
   const s=parseInt(document.getElementById('s-'+id).value)||1;
-  const rpe=getSelectedRpe(id);
-  if(!w){showToast('Bitte Gewicht auswählen');return;}
-  learnStage(id,w);
-  currentSession[id]={device_id:id,weight:w,reps:r,sets:s,rpe:rpe};
-  const card=document.getElementById('card-'+id);
-  card.classList.add('logged'); card.style.opacity='0.45';
-  const nameEl=card.querySelector('.device-name'); if(nameEl) nameEl.style.textDecoration='line-through';
-  const badge=card.querySelector('.device-num'); if(badge){badge.textContent='✓';badge.style.background='var(--accent)';badge.style.color='#000';}
-  const btn=document.getElementById('btn-'+id); btn.textContent='✓ ERLEDIGT'; btn.classList.add('done');
+  if(!w){showToast('Bitte Gewicht eingeben');return;}
+  currentSession[id]={device_id:id,weight:w,reps:r,sets:s};
+  document.getElementById('card-'+id).classList.add('logged');
+  const btn=document.getElementById('btn-'+id);
+  btn.textContent='✓ EINGETRAGEN'; btn.classList.add('done');
   showToast('Eingetragen!');
 }
 
 async function finishWorkout(){
+  const btn=document.querySelector('.finish-btn');
+  if(btn && btn.disabled) return;
+  if(btn){ btn.disabled=true; btn.textContent='Speichert…'; btn.style.opacity='0.6'; }
   const entries=Object.values(currentSession);
-  if(!entries.length){showToast('Mindestens 1 Ger\u00e4t einloggen');return;}
+  if(!entries.length){
+    if(btn){btn.disabled=false;btn.textContent='\u2713 TRAINING ABSCHLIESSEN';btn.style.opacity='';}
+    showToast('Mindestens 1 Ger\u00e4t einloggen');return;
+  }
   try{
     const [w]=await api('POST','workouts',{date:todayStr(),ts:Date.now()});
     await api('POST','workout_entries',entries.map(e=>({device_id:e.device_id,weight:e.weight,reps:e.reps,sets:e.sets,rpe:e.rpe||null,workout_id:w.id})));
     _workouts=null;
     localStorage.removeItem('forge_ki_plan');
-    showToast(`${entries.length} Ger\u00e4te gespeichert \uD83D\uDCAA`);
+    showToast(entries.length+' Ger\u00e4te gespeichert \uD83D\uDCAA');
     setTimeout(()=>goTo('home'),800);
-  } catch(e){showToast('Fehler beim Speichern \u26A0\uFE0F');}
+  } catch(e){
+    if(btn){btn.disabled=false;btn.textContent='\u2713 TRAINING ABSCHLIESSEN';btn.style.opacity='';}
+    showToast('Fehler beim Speichern \u26A0\uFE0F');
+  }
 }
 
 async function renderDevices(){
@@ -712,8 +648,8 @@ async function renderHistory(){
   }
   document.getElementById('history-list').innerHTML=ws.map(w=>`
     <div class="history-entry">
-      <div class="history-date" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><span>${fmtDate(w.date)}</span><span style="font-size:11px;color:var(--text-muted);">${w.entries.length} Geräte</span></div>
-      ${w.entries.map(e=>{const d=dm[e.device_id];const ri=e.rpe==='easy'?'😌':e.rpe==='perfect'?'💪':e.rpe==='hard'?'😤':'';return`<div class="history-device-row"><div class="history-device-name">${d?d.name:'—'}</div><div style="display:flex;align-items:center;gap:6px;"><div class="history-device-vals">${e.weight} kg·${e.reps} Wdh·${e.sets} Sätze ${ri}</div><button onclick="openEditEntry('${e.id}',${e.device_id},'${d?d.name:''}',${e.weight},${e.reps},${e.sets})" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;padding:3px 7px;cursor:pointer;flex-shrink:0;">&#9998;</button></div></div>`;}).join('')}
+      <div class="history-date">${fmtDate(w.date)}</div>
+      ${w.entries.map(e=>{const d=dm[e.device_id];return`<div class="history-device-row"><div class="history-device-name">${d?d.name:'—'}</div><div class="history-device-vals">${e.weight} kg &middot; ${e.reps} Wdh &middot; ${e.sets} S\u00e4tze</div></div>`;}).join('')}
     </div>`).join('');
 }
 
@@ -954,32 +890,6 @@ function applyKiPlanAndStart(geraete) {
   // Store plan so workout screen can pre-fill it
   localStorage.setItem('forge_ki_plan', JSON.stringify(geraete));
   goTo('workout');
-}
-
-function openEditEntry(entryId, deviceId, deviceName, weight, reps, sets){
-  document.getElementById('edit-entry-id').value = entryId;
-  document.getElementById('edit-entry-name').textContent = deviceName;
-  document.getElementById('edit-entry-weight').value = weight;
-  document.getElementById('edit-entry-reps').value = reps;
-  document.getElementById('edit-entry-sets').value = sets;
-  document.getElementById('edit-entry-modal').classList.add('open');
-}
-function closeEditEntryModal(){
-  document.getElementById('edit-entry-modal').classList.remove('open');
-}
-async function saveEditEntry(){
-  const id = document.getElementById('edit-entry-id').value;
-  const weight = parseFloat(document.getElementById('edit-entry-weight').value)||0;
-  const reps   = parseInt(document.getElementById('edit-entry-reps').value)||0;
-  const sets   = parseInt(document.getElementById('edit-entry-sets').value)||1;
-  if(!weight){showToast('Bitte Gewicht eingeben');return;}
-  try{
-    await api('PATCH','workout_entries',{weight,reps,sets},`?id=eq.${id}`);
-    _workouts=null;
-    closeEditEntryModal();
-    renderHistory();
-    showToast('Eintrag gespeichert!');
-  } catch(e){showToast('Fehler beim Speichern');}
 }
 function showToast(msg){
   const t=document.getElementById('toast');
