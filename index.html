@@ -650,7 +650,7 @@ async function renderDevices(){
   const devices=await loadDevices();
   const m=devices.filter(d=>!d.optional), o=devices.filter(d=>d.optional);
   let html=`<div class="section-title">PFLICHT (${m.length})</div>`;
-  m.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle} &middot; ${d.group}</div></div></div><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button></div>`; });
+  m.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle} &middot; ${d.group}</div></div></div><div style="display:flex;gap:6px;"><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button><button onclick="deleteDevice(${d.id},'${d.name}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#ff6b6b;font-size:13px;padding:5px 9px;cursor:pointer;">&#128465;</button></div></div>`; });
   if(o.length){
     html+=`<div class="section-title">OPTIONAL (${o.length})</div>`;
     o.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${m.length+i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle}</div></div></div><div style="display:flex;gap:6px;"><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button><button onclick="deleteDevice(${d.id},'${d.name}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#ff6b6b;font-size:13px;padding:5px 9px;cursor:pointer;">&#128465;</button></div></div>`; });
@@ -955,12 +955,14 @@ function renderKiPlan(plan, devices) {
       </div>`;
   });
 
-  html += `<button class="finish-btn" style="margin-top:8px;" onclick="applyKiPlanAndStart(${JSON.stringify(plan.geraete).replace(/</g,'\\u003c')})">▶ PLAN ÜBERNEHMEN &amp; STARTEN</button>`;
+  window._pendingKiPlan = plan.geraete;
+  html += `<button class="finish-btn" style="margin-top:8px;" onclick="applyKiPlanAndStart()">&#9654; PLAN &Uuml;BERNEHMEN &amp; STARTEN</button>`;
   document.getElementById('ki-content').innerHTML = html;
 }
 
-function applyKiPlanAndStart(geraete) {
-  // Store plan so workout screen can pre-fill it
+function applyKiPlanAndStart() {
+  const geraete = window._pendingKiPlan || [];
+  if(!geraete.length){ showToast('Kein Plan vorhanden'); return; }
   localStorage.setItem('forge_ki_plan', JSON.stringify(geraete));
   goTo('workout');
 }
