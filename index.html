@@ -601,8 +601,6 @@ function cardHTML(d,num,last,ki){
   const pr=ki?ki.reps:(last?last.reps:12);
   const ps=ki?ki.sets:(last?last.sets:3);
   const lastHint=last?`Letztes Mal: ${last.weight} kg \u00b7 ${last.reps} Wdh \u00b7 ${last.sets} S\u00e4tze`:'Erster Eintrag';
-  const kiAdjNote = kiAdjusted ? ` → ${kiAdjusted} kg` : '';
-  const kiHint=ki?`<div style="font-size:11px;color:var(--accent);margin-bottom:3px;">&#10024; KI: ${ki.weight} kg${kiAdjNote} \u00b7 ${ki.reps} Wdh \u00b7 ${ki.sets} S\u00e4tze</div>`:'';;
   const borderStyle=ki?'border:2px solid var(--accent);':'';
   const stages=getDeviceStages(d.id);
   // Find best weight: if KI value not in stages, pick next higher
@@ -619,6 +617,9 @@ function cardHTML(d,num,last,ki){
     }
   }
   if(!selW) selW = stages[Math.floor(stages.length/2)];
+  // Now kiAdjusted is defined, safe to use
+  const kiAdjNote = kiAdjusted ? ` \u2192 ${kiAdjusted} kg` : '';
+  const kiHint=ki?`<div style="font-size:11px;color:var(--accent);margin-bottom:3px;">&#10024; KI: ${ki.weight} kg${kiAdjNote} \u00b7 ${ki.reps} Wdh \u00b7 ${ki.sets} S\u00e4tze</div>`:'';
   const chips=stages.map(w=>`<div class="wchip ${w==selW?'wchip-active':''} ${ki&&w==ki.weight&&w!=selW?'wchip-ki':''}" onclick="selectStage(${d.id},${w})">${w}</div>`).join('');
   const badge=num!==null?`<div class="device-num">${num}</div>`:'<div class="device-num sub">&#8627;</div>';
   return `<div class="device-card" id="card-${d.id}" style="${borderStyle}">
