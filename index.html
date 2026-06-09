@@ -72,7 +72,6 @@
   .dli-num { width:30px; height:30px; border-radius:50%; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); font-family:'Bebas Neue'; font-size:15px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .dli-name { font-weight:600; font-size:14px; }
   .dli-muscle { font-size:11px; color:var(--text-muted); margin-top:2px; }
-  .dli-optional { font-size:10px; color:var(--orange); background:rgba(255,149,0,.1); border-radius:20px; padding:2px 7px; }
 
   .edit-btn { background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--text-muted); font-size:15px; padding:6px 10px; cursor:pointer; flex-shrink:0; }
   .edit-btn:active { background:var(--accent-dim); color:var(--accent); }
@@ -276,7 +275,7 @@
     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="new-name" placeholder="z.B. Beinpresse" type="text"></div>
     <div class="form-group"><label class="form-label">Muskelgruppe</label><input class="form-input" id="new-muscle" placeholder="z.B. Beine" type="text"></div>
     <div class="form-group"><label class="form-label">Station / Gruppe</label><input class="form-input" id="new-group" placeholder="z.B. Beinstrecker / Beinbeuger" type="text"></div>
-    <div class="form-group"><label class="form-label">Typ</label><select class="form-select" id="new-optional"><option value="false">Pflicht</option><option value="true">Optional</option></select></div>
+
     <button class="modal-btn" onclick="saveDevice()">SPEICHERN</button>
     <button class="modal-cancel" onclick="closeModal()">Abbrechen</button>
   </div>
@@ -291,7 +290,7 @@
     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="edit-name" type="text"></div>
     <div class="form-group"><label class="form-label">Muskelgruppe</label><input class="form-input" id="edit-muscle" type="text"></div>
     <div class="form-group"><label class="form-label">Station / Gruppe</label><input class="form-input" id="edit-group" type="text"></div>
-    <div class="form-group"><label class="form-label">Typ</label><select class="form-select" id="edit-optional"><option value="false">Pflicht</option><option value="true">Optional</option></select></div>
+
     <div class="form-group">
       <label class="form-label">Gewichtsstufen (kg)</label>
       <div class="wchip-scroll" id="edit-stages-chips" style="margin-bottom:10px;"></div>
@@ -425,10 +424,8 @@ async function loadDevices(force=false) {
   try {
     let d=await api('GET','devices',null,'?order=sort_order.asc');
     // Only seed if DB is genuinely empty (never on error/timeout)
-    if(Array.isArray(d) && d.length===0){
-      await api('POST','devices',DEFAULT_DEVICES);
-      d=DEFAULT_DEVICES;
-    }
+    // Never auto-seed – user manages devices manually
+    // if(Array.isArray(d) && d.length===0){ await api('POST','devices',DEFAULT_DEVICES); }
     if(Array.isArray(d) && d.length>0){ _devices=d; return d; }
     // If something unexpected, return cache or empty – never overwrite
     return _devices||[];
@@ -538,8 +535,7 @@ async function renderWorkout(){
   const workouts=await loadWorkouts();
   document.getElementById('workout-date-sub').textContent=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'});
   function lastVal(id){ for(const w of workouts){ const e=w.entries.find(e=>e.device_id===id); if(e) return e; } return null; }
-  const mandatory=devices.filter(d=>!d.optional);
-  const optional=devices.filter(d=>d.optional);
+  const mandatory=devices;
   let html='',sn=1;
   groupBy(mandatory).forEach(g=>{
     if(g.devices.length>1){
@@ -548,10 +544,7 @@ async function renderWorkout(){
     } else { html+=cardHTML(g.devices[0],sn,lastVal(g.devices[0].id)); }
     sn++;
   });
-  if(optional.length){
-    html+='<div class="section-title">OPTIONAL</div>';
-    groupBy(optional).forEach(g=>g.devices.forEach(d=>{html+=cardHTML(d,sn++,lastVal(d.id));}));
-  }
+  
   html+='<button class="finish-btn" onclick="finishWorkout()">&#10003; TRAINING ABSCHLIESSEN</button>';
   document.getElementById('workout-devices-list').innerHTML=html;
 }
@@ -670,12 +663,10 @@ async function finishWorkout(){
 
 async function renderDevices(){
   const devices=await loadDevices();
-  const m=devices.filter(d=>!d.optional), o=devices.filter(d=>d.optional);
-  let html=`<div class="section-title">PFLICHT (${m.length})</div>`;
+  const m=devices;
+  let html=`<div class="section-title">GERÄTE (${m.length})</div>`;
   m.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle} &middot; ${d.group}</div></div></div><div style="display:flex;gap:6px;"><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button><button onclick="deleteDevice(${d.id},'${d.name}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#ff6b6b;font-size:13px;padding:5px 9px;cursor:pointer;">&#128465;</button></div></div>`; });
-  if(o.length){
-    html+=`<div class="section-title">OPTIONAL (${o.length})</div>`;
-    o.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${m.length+i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle}</div></div></div><div style="display:flex;gap:6px;"><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button><button onclick="deleteDevice(${d.id},'${d.name}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#ff6b6b;font-size:13px;padding:5px 9px;cursor:pointer;">&#128465;</button></div></div>`; });
+  
   }
   html+='<button class="add-device-btn" onclick="openAddDevice()">+ Neues Ger\u00e4t hinzuf\u00fcgen</button>';
   document.getElementById('devices-list').innerHTML=html;
@@ -689,7 +680,6 @@ function openEditDevice(id){
   document.getElementById('edit-name').value=d.name;
   document.getElementById('edit-muscle').value=d.muscle;
   document.getElementById('edit-group').value=d.group||d.name;
-  document.getElementById('edit-optional').value=d.optional?'true':'false';
   renderEditStages(id);
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -703,7 +693,7 @@ async function saveEditDevice(){
   const name=document.getElementById('edit-name').value.trim();
   const muscle=document.getElementById('edit-muscle').value.trim();
   const group=document.getElementById('edit-group').value.trim();
-  const optional=document.getElementById('edit-optional').value==='true';
+  const optional=false;
   if(!name){showToast('Name eingeben');return;}
   if(window._editStages && window._editStages.length){
     localStorage.setItem('forge_stages_'+id, JSON.stringify(window._editStages));
@@ -726,7 +716,7 @@ async function saveDevice(){
   const name=document.getElementById('new-name').value.trim();
   const muscle=document.getElementById('new-muscle').value.trim();
   const group=document.getElementById('new-group').value.trim();
-  const optional=document.getElementById('new-optional').value==='true';
+  const optional=false;
   if(!name){showToast('Name eingeben');return;}
   const devices=await loadDevices();
   const maxId=Math.max(...devices.map(d=>d.id),0);
@@ -1214,7 +1204,7 @@ async function renderProgressDashboard() {
     </div>`;
 
   // ── SECTION 5: Kraft-Fortschritt ──
-  const strengthRows = devices.filter(d=>!d.optional).map(d => {
+  const strengthRows = devices.map(d => {
     const entries = workouts
       .filter(w => w.entries.some(e=>e.device_id===d.id))
       .map(w => w.entries.find(e=>e.device_id===d.id))
