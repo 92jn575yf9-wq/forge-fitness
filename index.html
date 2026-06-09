@@ -541,9 +541,12 @@ function getKiVal(deviceName) {
 }
 
 async function renderWorkout(){
-  currentSession={};
-  stopTimer();
-  startTimer();
+  const trainingActive = !!(_timerInterval !== null || _isPaused);
+  if(!trainingActive){
+    currentSession={};
+    stopTimer();
+    startTimer();
+  }
   const devices=await loadDevices();
   const workouts=await loadWorkouts();
   document.getElementById('workout-date-sub').textContent=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'});
@@ -559,7 +562,9 @@ async function renderWorkout(){
   });
   
   html+='<button class="finish-btn" onclick="finishWorkout()">&#10003; TRAINING ABSCHLIESSEN</button>';
-  document.getElementById('workout-devices-list').innerHTML=html;
+  if(!trainingActive){
+    document.getElementById('workout-devices-list').innerHTML=html;
+  }
 }
 
 function getDeviceStages(deviceId){
@@ -710,6 +715,13 @@ async function saveEditDevice(){
   if(!name){showToast('Name eingeben');return;}
   if(window._editStages && window._editStages.length){
     localStorage.setItem('forge_stages_'+id, JSON.stringify(window._editStages));
+    const scroll = document.getElementById('wscroll-'+id);
+    if(scroll){
+      const stages = window._editStages;
+      const cur = getSelectedWeight(id)||stages[Math.floor(stages.length/2)];
+      const selW = stages.includes(cur)?cur:(stages.find(s=>s>=cur)||stages[stages.length-1]);
+      scroll.innerHTML = stages.map(w=>`<div class="wchip ${w==selW?'wchip-active':''}" onclick="selectStage(${id},${w})">${w}</div>`).join('');
+    }
   }
   try{
     await api('PATCH','devices',{name,muscle:muscle||'—',group:group||name,optional},`?id=eq.${id}`);
