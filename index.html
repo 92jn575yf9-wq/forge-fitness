@@ -180,6 +180,9 @@
   .rpe-btn.rpe-perfect { border-color:var(--accent); background:var(--accent-dim); }
   .rpe-btn.rpe-hard { border-color:#ff6b6b; background:rgba(255,107,107,.12); }
   .rpe-label-txt { font-size:10px; font-weight:600; color:var(--text-muted); letter-spacing:.5px; }
+
+  .pause-banner { background:rgba(255,149,0,.12); border:1px solid var(--orange); border-radius:12px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--orange); }
+  .pause-banner-btn { background:var(--orange); color:#000; border:none; border-radius:8px; padding:8px 14px; font-family:'Bebas Neue'; font-size:15px; cursor:pointer; }
   .sync-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); display:inline-block; transition:background .3s; }
   .sync-dot.syncing { background:var(--orange); animation:pulse .8s infinite; }
   .sync-dot.error { background:#ff4444; }
@@ -223,7 +226,11 @@
   <div class="workout-header">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div><div class="workout-title">TRAINING</div><div class="workout-subtitle" id="workout-date-sub"></div></div>
-      <div class="btn-icon" onclick="goTo('home')">✕</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div id="workout-timer" style="font-family:'Bebas Neue';font-size:22px;color:var(--accent);letter-spacing:2px;min-width:70px;text-align:center;">00:00</div>
+        <div class="btn-icon" id="pause-btn" onclick="togglePause()" title="Pause">⏸</div>
+        <div class="btn-icon" onclick="confirmLeaveWorkout()">✕</div>
+      </div>
     </div>
   </div>
   <div class="scroll" id="workout-devices-list"><div class="loader"><div class="spinner"></div>Lade Geräte…</div></div>
@@ -462,6 +469,7 @@ function goTo(name){
   document.getElementById('screen-'+name).classList.add('active');
   currentScreen=name;
   if(name==='home')    renderHome();
+  if(name!=='workout') { stopTimer(); const t=document.getElementById('workout-timer'); if(t) t.textContent='00:00'; }
   if(name==='workout') renderWorkout();
   if(name==='devices') renderDevices();
   if(name==='history') renderHistory();
@@ -531,6 +539,8 @@ function getKiVal(deviceName) {
 
 async function renderWorkout(){
   currentSession={};
+  stopTimer();
+  startTimer();
   const devices=await loadDevices();
   const workouts=await loadWorkouts();
   document.getElementById('workout-date-sub').textContent=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'});
@@ -649,7 +659,8 @@ async function finishWorkout(){
     showToast('Mindestens 1 Ger\u00e4t einloggen');return;
   }
   try{
-    const [w]=await api('POST','workouts',{date:todayStr(),ts:Date.now()});
+    const duration=stopTimer();
+    const [w]=await api('POST','workouts',{date:todayStr(),ts:Date.now(),duration_seconds:duration});
     await api('POST','workout_entries',entries.map(e=>({device_id:e.device_id,weight:e.weight,reps:e.reps,sets:e.sets,rpe:e.rpe||null,workout_id:w.id})));
     _workouts=null;
     localStorage.removeItem('forge_ki_plan');
@@ -737,7 +748,7 @@ async function renderHistory(){
   }
   document.getElementById('history-list').innerHTML=ws.map(w=>`
     <div class="history-entry">
-      <div class="history-date" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><span>${fmtDate(w.date)}</span><span style="font-size:11px;color:var(--text-muted);">${w.entries.length} Geräte</span></div>
+      <div class="history-date" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><span>${fmtDate(w.date)}</span><span style="font-size:11px;color:var(--text-muted);">${w.entries.length} Geräte${w.duration_seconds?" · "+Math.round(w.duration_seconds/60)+" Min":""}</span></div>
       ${w.entries.map(e=>{const d=dm[e.device_id];const ri=e.rpe==='easy'?'😌':e.rpe==='perfect'?'💪':e.rpe==='hard'?'😤':'';return`<div class="history-device-row"><div class="history-device-name">${d?d.name:'—'}</div><div style="display:flex;align-items:center;gap:6px;"><div class="history-device-vals">${e.weight} kg · ${e.reps} Wdh · ${e.sets} Sätze ${ri}</div><button onclick="openEditEntry('${e.id}',${e.device_id},'${d?d.name:''}',${e.weight},${e.reps},${e.sets})" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:11px;padding:3px 7px;cursor:pointer;flex-shrink:0;">&#9998;</button></div></div>`;}).join('')}
     </div>`).join('');
 }
@@ -869,11 +880,12 @@ async function generateKiPlan() {
   const last5 = workouts.slice(0,5);
   const historyText = last5.map(w => {
     const dateStr = w.date;
+    const dur = w.duration_seconds ? ` (${Math.round(w.duration_seconds/60)} Min)` : '';
     const entries = w.entries.map(e => {
       const d = deviceMap[e.device_id];
       return `  - ${d?d.name:'?'}: ${e.weight}kg x ${e.reps} Wdh x ${e.sets} Sätze`;
     }).join('\n');
-    return `${dateStr}:\n${entries}`;
+    return `${dateStr}${dur}:\n${entries}`;
   }).join('\n\n');
 
   const deviceList = devices.map(d=>`- ${d.name} (${d.muscle}${d.optional?' – optional':''})`).join('\n');
@@ -1047,6 +1059,89 @@ function addEditStage() {
     refreshEditStagesUI();
   }
   inp.value='';
+}
+
+// ── TIMER + PAUSE ──
+let _timerStart = null;      // Date.now() when started/resumed
+let _timerAccum = 0;         // accumulated ms before last pause
+let _timerInterval = null;
+let _isPaused = false;
+let _savedSession = null;    // for pause/resume
+
+function startTimer() {
+  _timerStart = Date.now();
+  _timerAccum = 0;
+  _isPaused = false;
+  _timerInterval = setInterval(updateTimerDisplay, 1000);
+}
+
+function pauseTimer() {
+  if(_timerInterval) clearInterval(_timerInterval);
+  _timerAccum += Date.now() - (_timerStart||Date.now());
+  _timerStart = null;
+  _isPaused = true;
+}
+
+function resumeTimer() {
+  _timerStart = Date.now();
+  _isPaused = false;
+  _timerInterval = setInterval(updateTimerDisplay, 1000);
+}
+
+function stopTimer() {
+  if(_timerInterval) clearInterval(_timerInterval);
+  if(_timerStart) _timerAccum += Date.now() - _timerStart;
+  _timerStart = null;
+  _timerInterval = null;
+  return Math.round(_timerAccum / 1000); // total seconds
+}
+
+function getElapsedSeconds() {
+  let ms = _timerAccum;
+  if(_timerStart) ms += Date.now() - _timerStart;
+  return Math.round(ms / 1000);
+}
+
+function updateTimerDisplay() {
+  const s = getElapsedSeconds();
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  const el = document.getElementById('workout-timer');
+  if(el) el.textContent = mm+':'+ss;
+}
+
+function togglePause() {
+  if(_isPaused) {
+    resumeTimer();
+    document.getElementById('pause-btn').textContent = '⏸';
+    document.getElementById('pause-btn').style.color = '';
+    // Remove pause banner
+    const banner = document.getElementById('pause-banner');
+    if(banner) banner.remove();
+  } else {
+    pauseTimer();
+    document.getElementById('pause-btn').textContent = '▶️';
+    document.getElementById('pause-btn').style.color = 'var(--orange)';
+    // Show pause banner
+    const list = document.getElementById('workout-devices-list');
+    if(list && !document.getElementById('pause-banner')) {
+      const banner = document.createElement('div');
+      banner.id = 'pause-banner';
+      banner.className = 'pause-banner';
+      banner.innerHTML = '⏸ Training pausiert &ndash; Timer gestoppt <button class="pause-banner-btn" onclick="togglePause()">▶ WEITER</button>';
+      list.prepend(banner);
+    }
+  }
+}
+
+function confirmLeaveWorkout() {
+  const entries = Object.values(currentSession);
+  if(entries.length > 0) {
+    if(!confirm('Training abbrechen? Nicht gespeicherte Einträge gehen verloren.')) return;
+  }
+  stopTimer();
+  document.getElementById('workout-timer').textContent = '00:00';
+  goTo('home');
 }
 function showToast(msg){
   const t=document.getElementById('toast');
