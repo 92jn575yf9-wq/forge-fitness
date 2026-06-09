@@ -684,8 +684,6 @@ async function renderDevices(){
   const m=devices;
   let html=`<div class="section-title">GERÄTE (${m.length})</div>`;
   m.forEach((d,i)=>{ html+=`<div class="device-list-item"><div class="dli-left"><div class="dli-num">${i+1}</div><div><div class="dli-name">${d.name}</div><div class="dli-muscle">${d.muscle} &middot; ${d.group}</div></div></div><div style="display:flex;gap:6px;"><button class="edit-btn" onclick="openEditDevice(${d.id})">&#9998;</button><button onclick="deleteDevice(${d.id},'${d.name}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#ff6b6b;font-size:13px;padding:5px 9px;cursor:pointer;">&#128465;</button></div></div>`; });
-  
-  }
   html+='<button class="add-device-btn" onclick="openAddDevice()">+ Neues Ger\u00e4t hinzuf\u00fcgen</button>';
   document.getElementById('devices-list').innerHTML=html;
 }
