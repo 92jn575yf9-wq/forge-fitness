@@ -598,35 +598,52 @@ function getSelectedRpe(deviceId){
   return null;
 }
 function cardHTML(d,num,last,ki){
-  const pw=ki?ki.weight:(last?last.weight:null);
   const pr=ki?ki.reps:(last?last.reps:12);
   const ps=ki?ki.sets:(last?last.sets:3);
   const lastHint=last?`Letztes Mal: ${last.weight} kg \u00b7 ${last.reps} Wdh \u00b7 ${last.sets} S\u00e4tze`:'Erster Eintrag';
   const borderStyle=ki?'border:2px solid var(--accent);':'';
   const stages=getDeviceStages(d.id);
-  // Find best weight: if KI value not in stages, pick next higher
-  let selW = pw || null;
-  let kiAdjusted = null;
-  if(ki && ki.weight){
+
+  // Find best stage for KI value
+  let kiAdjusted=null;
+  let selW=null;
+  if(ki&&ki.weight){
     if(stages.includes(ki.weight)){
-      selW = selW || ki.weight;
+      selW=ki.weight;
     } else {
-      const higher = stages.find(s=>s>=ki.weight);
-      const fallback = stages[stages.length-1];
-      kiAdjusted = higher || fallback;
-      selW = selW || kiAdjusted;
+      kiAdjusted=stages.find(s=>s>=ki.weight)||stages[stages.length-1];
+      selW=kiAdjusted;
     }
   }
-  if(!selW) selW = stages[Math.floor(stages.length/2)];
-  // Now kiAdjusted is defined, safe to use
-  const kiAdjNote = kiAdjusted ? ` \u2192 ${kiAdjusted} kg` : '';
-  const kiHint=ki?`<div style="font-size:11px;color:var(--accent);margin-bottom:3px;">&#10024; KI: ${ki.weight} kg${kiAdjNote} \u00b7 ${ki.reps} Wdh \u00b7 ${ki.sets} S\u00e4tze</div>`:'';
-  const chips=stages.map(w=>`<div class="wchip ${w==selW?'wchip-active':''} ${ki&&w==ki.weight&&w!=selW?'wchip-ki':''}" onclick="selectStage(${d.id},${w})">${w}</div>`).join('');
+  if(!selW) selW=last?stages.find(s=>s>=last.weight)||stages[stages.length-1]:stages[Math.floor(stages.length/2)];
+
+  const chips=stages.map(w=>`<div class="wchip ${w==selW?'wchip-active':''}" onclick="selectStage(${d.id},${w})">${w}</div>`).join('');
   const badge=num!==null?`<div class="device-num">${num}</div>`:'<div class="device-num sub">&#8627;</div>';
+
+  // KI suggestion block
+  const kiBlock=ki?`
+    <div style="font-size:10px;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">&#10024; KI-Vorschlag</div>
+    <div style="background:rgba(181,242,61,0.08);border:2px solid var(--accent);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-family:'Bebas Neue';font-size:34px;color:var(--accent);line-height:1;">${ki.weight} <span style="font-size:16px;">kg</span></div>
+        ${kiAdjusted?`<div style="font-size:11px;color:#7ab82a;margin-top:2px;">\u2192 n\u00e4chste Stufe: ${kiAdjusted} kg</div>`:''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:13px;color:var(--accent);font-weight:600;">${ki.reps} Wdh</div>
+        <div style="font-size:13px;color:var(--accent);font-weight:600;">${ki.sets} S\u00e4tze</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;">Stufe w\u00e4hlen (abweichen)</div>`
+    :'';
+
   return `<div class="device-card" id="card-${d.id}" style="${borderStyle}">
     <div class="device-top">${badge}<div class="device-name">${d.name}</div><div class="device-muscle">${d.muscle}</div></div>
-    ${kiHint}<div class="hint-text">${lastHint}</div>
-    <div style="margin-bottom:12px;"><div class="input-label" style="margin-bottom:6px;">GEWICHT KG</div><div class="wchip-scroll" id="wscroll-${d.id}">${chips}</div></div>
+    <div class="hint-text">${lastHint}</div>
+    ${kiBlock}
+    <div style="margin-bottom:12px;${!ki?'margin-top:8px;':''}">
+      ${!ki?'<div class="input-label" style="margin-bottom:6px;">GEWICHT KG</div>':''}
+      <div class="wchip-scroll" id="wscroll-${d.id}">${chips}</div>
+    </div>
     <div class="input-row" style="grid-template-columns:1fr 1fr;margin-bottom:12px;">
       <div class="input-group"><div class="input-label">Wdh.</div><input class="input-field" id="r-${d.id}" type="number" inputmode="numeric" value="${pr}" placeholder="12"></div>
       <div class="input-group"><div class="input-label">S\u00e4tze</div><input class="input-field" id="s-${d.id}" type="number" inputmode="numeric" value="${ps}" placeholder="3"></div>
