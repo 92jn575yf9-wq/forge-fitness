@@ -51,7 +51,7 @@
   .group-header { display:flex; align-items:center; gap:10px; font-family:'Bebas Neue'; font-size:15px; letter-spacing:1.5px; color:var(--text-muted); margin:16px 0 4px; }
   .group-station { width:24px; height:24px; border-radius:50%; background:var(--accent); color:#000; font-family:'Bebas Neue'; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .device-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:10px; transition:border-color .2s; }
-  .device-card.logged { border-color:var(--accent); }
+  .device-card.logged { opacity:0.45; }
   .device-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
   .device-num { width:28px; height:28px; border-radius:50%; background:var(--accent); color:#000; font-family:'Bebas Neue'; font-size:15px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .device-num.sub { background:var(--surface2); color:var(--text-muted); border:1px solid var(--border); font-size:12px; }
@@ -687,7 +687,7 @@ function logDevice(id){
   learnStage(id,w);
   currentSession[id]={device_id:id,weight:w,reps:r,sets:s,rpe:rpe};
   const card=document.getElementById('card-'+id);
-  card.classList.add('logged'); card.style.opacity='0.45';
+  card.classList.add('logged');
   const nameEl=card.querySelector('.device-name'); if(nameEl) nameEl.style.textDecoration='line-through';
   const badge=card.querySelector('.device-num'); if(badge){badge.textContent='✓';badge.style.background='var(--accent)';badge.style.color='#000';}
   const btn=document.getElementById('btn-'+id); btn.textContent='✓ ERLEDIGT'; btn.classList.add('done');
