@@ -533,11 +533,22 @@ async function renderHome(){
 function startWorkout(){ goTo('workout'); }
 
 function getKiVal(deviceName) {
-  const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
-  if(!plan) return null;
-  const match = plan.find(g => g.name.toLowerCase()===deviceName.toLowerCase());
-  if(!match) return null;
-  return {weight: match.gewicht, reps: match.wiederholungen, sets: match.saetze};
+  try {
+    const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
+    if(!plan||!plan.length) return null;
+    const dn=deviceName.toLowerCase().replace(/[^a-z0-9äöü]/g,' ').trim();
+    // 1. Exact
+    let m=plan.find(g=>g.name.toLowerCase()===deviceName.toLowerCase());
+    // 2. Contains
+    if(!m) m=plan.find(g=>{const gn=g.name.toLowerCase();return gn.includes(dn)||dn.includes(gn);});
+    // 3. Word overlap
+    if(!m){const dw=dn.split(' ').filter(w=>w.length>2);m=plan.find(g=>{const gw=g.name.toLowerCase().split(' ').filter(w=>w.length>2);return dw.some(w=>gw.some(gv=>gv.includes(w)||w.includes(gv)));});}
+    if(!m) return null;
+    return {weight:m.gewicht, reps:m.wiederholungen, sets:m.saetze};
+  } catch(e){ return null; }
+}
+function hasKiPlan(){
+  try{const p=JSON.parse(localStorage.getItem('forge_ki_plan')||'null');return !!(p&&p.length);}catch(e){return false;}
 }
 
 async function renderWorkout(){
@@ -551,13 +562,21 @@ async function renderWorkout(){
   const workouts=await loadWorkouts();
   document.getElementById('workout-date-sub').textContent=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'long'});
   function lastVal(id){ for(const w of workouts){ const e=w.entries.find(e=>e.device_id===id); if(e) return e; } return null; }
-  const mandatory=devices;
-  let html='',sn=1;
+  const mandatory=[...devices].sort((a,b)=>{const ak=getKiVal(a.name)?0:1,bk=getKiVal(b.name)?0:1;return ak-bk;});
+  const kiActive=hasKiPlan();
+  let html=kiActive?'<div style="background:rgba(181,242,61,.1);border:1px solid var(--accent);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--accent);">&#10024; KI-Plan aktiv – Geräte mit Vorschlag oben</div>':'';
+  let kiSectionDone=false;
+  let sn=1;
   groupBy(mandatory).forEach(g=>{
+    const gHasKi=g.devices.some(d=>getKiVal(d.name));
+    if(!kiSectionDone&&!gHasKi&&kiActive){
+      html+='<div style="font-size:10px;letter-spacing:2px;color:var(--text-muted);margin:16px 0 8px;">WEITERE GERÄTE</div>';
+      kiSectionDone=true;
+    }
     if(g.devices.length>1){
       html+=`<div class="group-header"><span class="group-station">${sn}</span>${g.name}</div>`;
-      g.devices.forEach(d=>{html+=cardHTML(d,null,lastVal(d.id));});
-    } else { html+=cardHTML(g.devices[0],sn,lastVal(g.devices[0].id)); }
+      g.devices.forEach(d=>{html+=cardHTML(d,null,lastVal(d.id),getKiVal(d.name));});
+    } else { html+=cardHTML(g.devices[0],sn,lastVal(g.devices[0].id),getKiVal(g.devices[0].name)); }
     sn++;
   });
   
