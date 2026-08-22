@@ -536,13 +536,14 @@ function getKiVal(deviceName) {
   try {
     const plan = JSON.parse(localStorage.getItem('forge_ki_plan')||'null');
     if(!plan||!plan.length) return null;
-    const dn=deviceName.toLowerCase().replace(/[^a-z0-9äöü]/g,' ').trim();
-    // 1. Exact
-    let m=plan.find(g=>g.name.toLowerCase()===deviceName.toLowerCase());
-    // 2. Contains
-    if(!m) m=plan.find(g=>{const gn=g.name.toLowerCase();return gn.includes(dn)||dn.includes(gn);});
-    // 3. Word overlap
-    if(!m){const dw=dn.split(' ').filter(w=>w.length>2);m=plan.find(g=>{const gw=g.name.toLowerCase().split(' ').filter(w=>w.length>2);return dw.some(w=>gw.some(gv=>gv.includes(w)||w.includes(gv)));});}
+    const dn=deviceName.toLowerCase().trim();
+    // 1. Exact match only
+    let m=plan.find(g=>g.name.toLowerCase().trim()===dn);
+    // 2. Strict contains (whole name must be substring, min 4 chars to avoid false positives)
+    if(!m && dn.length>=4) m=plan.find(g=>{
+      const gn=g.name.toLowerCase().trim();
+      return gn.length>=4 && (gn===dn || gn.includes(dn) || dn.includes(gn));
+    });
     if(!m) return null;
     return {weight:m.gewicht, reps:m.wiederholungen, sets:m.saetze};
   } catch(e){ return null; }
